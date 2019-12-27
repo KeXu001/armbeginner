@@ -1,0 +1,189 @@
+/*
+ * GccApplication1.c
+ *
+ * Created: 12/19/2019 5:22:37 PM
+ * Author : Kevin
+ */ 
+
+
+#include "sam.h"
+
+/*
+ * From hal_atomic.h
+ */
+#define CRITICAL_SECTION_ENTER()         \
+	{                                    \
+		volatile uint32_t __atomic;      \
+		__atomic = __get_PRIMASK();      \
+		__disable_irq();                 \
+		__DMB();
+#define CRITICAL_SECTION_LEAVE()         \
+		__DMB();                         \
+		__set_PRIMASK(__atomic);         \
+	}
+
+/*
+ * Configurations copied from LedBlink HPL
+ */
+#define CONFIG_NVM_WAIT_STATE	0
+#define CONFIG_CPU_DIV			PM_CPUSEL_CPUDIV_DIV1_Val
+#define CONFIG_APBA_DIV			PM_APBASEL_APBADIV_DIV1_Val
+#define CONFIG_APBB_DIV			PM_APBBSEL_APBBDIV_DIV1_Val
+#define CONFIG_APBC_DIV			PM_APBCSEL_APBCDIV_DIV1_Val
+#define CONFIG_OSC8M_PRESC		SYSCTRL_OSC8M_PRESC_3_Val
+#define CONFIG_OSC8M_RUNSTDBY	0
+#define CONFIG_OSC8M_ENABLE		1
+#define CONFIG_GCLK_GEN_0_DIV	1
+#define CONFIG_GCLK_GEN_0_RUNSTDBY	0
+#define CONFIG_GCLK_GEN_0_DIVSEL	0
+#define CONFIG_GCLK_GEN_0_OE		0
+#define CONFIG_GCLK_GEN_0_OOV		0
+#define CONFIG_GCLK_GEN_0_IDC		0
+#define CONFIG_GCLK_GEN_0_GENEN		1
+#define CONFIG_GCLK_GEN_0_SRC		GCLK_GENCTRL_SRC_OSC8M_Val
+#define CONFIG_SYSTICK_TICKINTERR	0
+
+#define CONFIG_CPU_FREQUENCY		1000000
+
+int main(void)
+{
+	SystemInit();
+	
+	PORT->Group[0].DIRSET.reg = PORT_PA02;
+	PORT->Group[0].OUTSET.reg = PORT_PA02;
+	
+	CRITICAL_SECTION_ENTER();
+	NVMCTRL->CTRLB.reg |= NVMCTRL_CTRLB_RWS(CONFIG_NVM_WAIT_STATE);
+	CRITICAL_SECTION_LEAVE();
+	
+	CRITICAL_SECTION_ENTER();
+	PM->CPUSEL.reg |= PM_CPUSEL_CPUDIV(CONFIG_CPU_DIV);
+	CRITICAL_SECTION_LEAVE();
+	
+	CRITICAL_SECTION_ENTER();
+	PM->APBASEL.reg |= PM_APBASEL_APBADIV(CONFIG_APBA_DIV);
+	CRITICAL_SECTION_LEAVE();
+	
+	CRITICAL_SECTION_ENTER();
+	PM->APBBSEL.reg |= PM_APBBSEL_APBBDIV(CONFIG_APBB_DIV);
+	CRITICAL_SECTION_LEAVE();
+	
+	CRITICAL_SECTION_ENTER();
+	PM->APBCSEL.reg |= PM_APBCSEL_APBCDIV(CONFIG_APBC_DIV);
+	CRITICAL_SECTION_LEAVE();
+	
+	uint16_t calib;
+	calib = (SYSCTRL->OSC8M.reg & SYSCTRL_OSC8M_CALIB_Msk) >> SYSCTRL_OSC8M_CALIB_Pos;
+	uint16_t frange;
+	frange = (SYSCTRL->OSC8M.reg & SYSCTRL_OSC8M_FRANGE_Msk) >> SYSCTRL_OSC8M_FRANGE_Pos;
+	
+	CRITICAL_SECTION_ENTER();
+	SYSCTRL->OSC8M.reg = SYSCTRL_OSC8M_FRANGE(frange) |
+							SYSCTRL_OSC8M_CALIB(calib) |
+							SYSCTRL_OSC8M_PRESC(CONFIG_OSC8M_PRESC) |
+							(CONFIG_OSC8M_RUNSTDBY << SYSCTRL_OSC8M_RUNSTDBY_Pos) |
+							(CONFIG_OSC8M_ENABLE << SYSCTRL_OSC8M_ENABLE_Pos);
+	CRITICAL_SECTION_LEAVE();
+	while(!SYSCTRL->PCLKSR.bit.OSC8MRDY); // modified
+	
+	CRITICAL_SECTION_ENTER();
+	SYSCTRL->OSC8M.reg |= SYSCTRL_OSC8M_ONDEMAND;
+	CRITICAL_SECTION_LEAVE();
+	
+	CRITICAL_SECTION_ENTER();
+	SYSCTRL->OSC32K.reg &= ~SYSCTRL_OSC32K_ENABLE;
+	CRITICAL_SECTION_LEAVE();
+	
+	CRITICAL_SECTION_ENTER();
+	GCLK->GENDIV.reg = GCLK_GENDIV_DIV(CONFIG_GCLK_GEN_0_DIV) |
+						GCLK_GENDIV_ID(0);
+	CRITICAL_SECTION_LEAVE();
+	
+	CRITICAL_SECTION_ENTER();
+	GCLK->GENCTRL.reg = (CONFIG_GCLK_GEN_0_RUNSTDBY << GCLK_GENCTRL_RUNSTDBY_Pos) |
+							(CONFIG_GCLK_GEN_0_DIVSEL << GCLK_GENCTRL_DIVSEL_Pos) |
+							(CONFIG_GCLK_GEN_0_OE << GCLK_GENCTRL_OE_Pos) |
+							(CONFIG_GCLK_GEN_0_OOV << GCLK_GENCTRL_OOV_Pos) |
+							(CONFIG_GCLK_GEN_0_IDC << GCLK_GENCTRL_IDC_Pos) |
+							(CONFIG_GCLK_GEN_0_GENEN << GCLK_GENCTRL_GENEN_Pos) |
+							(CONFIG_GCLK_GEN_0_SRC << GCLK_GENCTRL_SRC_Pos) |
+							GCLK_GENCTRL_ID(0);
+	while(GCLK->STATUS.bit.SYNCBUSY);
+	CRITICAL_SECTION_LEAVE();
+	
+	SysTick->LOAD = (0xFFFFFF << SysTick_LOAD_RELOAD_Pos);
+	SysTick->CTRL = (1 << SysTick_CTRL_ENABLE_Pos) |
+						(CONFIG_SYSTICK_TICKINTERR << SysTick_CTRL_TICKINT_Pos) |
+						(1 << SysTick_CTRL_CLKSOURCE_Pos);
+	
+    while (1) 
+    {
+		PORT->Group[0].OUTTGL.reg = PORT_PA02;
+		
+		uint16_t milliseconds = 1000;
+		uint32_t cycles = milliseconds * (CONFIG_CPU_FREQUENCY / 10000) * 10;
+		
+		uint8_t  n   = cycles >> 24;
+		uint32_t buf = cycles;
+
+		while (n--) {
+			SysTick->LOAD = 0xFFFFFF;
+			SysTick->VAL  = 0xFFFFFF;
+			while (!(SysTick->CTRL & SysTick_CTRL_COUNTFLAG_Msk));
+			buf -= 0xFFFFFF;
+		}
+
+		SysTick->LOAD = buf;
+		SysTick->VAL  = buf;
+		while (!(SysTick->CTRL & SysTick_CTRL_COUNTFLAG_Msk));
+    }
+}
+
+void useless(void)
+{
+	//SET UP LED
+	
+	// REG_PORT_DIRSET0 |= (1 << 2);
+	PORT->Group[0].DIRSET.reg = PORT_PA02;  //set PA02 to output
+	PORT->Group[0].OUTSET.reg = PORT_PA02;  //set initial state of PA02 to HIGH
+	
+	
+	
+	
+	/*
+	SYSCTRL->XOSC32K.reg =  SYSCTRL_XOSC32K_STARTUP(0x2u) | SYSCTRL_XOSC32K_XTALEN;
+	SYSCTRL->XOSC32K.bit.ENABLE = 1u;
+	while (!SYSCTRL->PCLKSR.bit.XOSC32KRDY) {};
+	
+	GCLK->CTRL.bit.SWRST = 1u;
+	while (GCLK->CTRL.bit.SWRST && GCLK->STATUS.bit.SYNCBUSY) {};
+	GCLK->GENDIV.reg = GCLK_GENDIV_ID(7u) | GCLK_GENDIV_DIV(32u);
+	while (GCLK->STATUS.bit.SYNCBUSY) {};
+	GCLK->GENCTRL.reg = GCLK_GENCTRL_ID(7u) |  GCLK_GENCTRL_SRC_XOSC32K;
+	while (GCLK->STATUS.bit.SYNCBUSY) {}; 
+	GCLK->GENCTRL.reg = GCLK_GENCTRL_GENEN;
+	while (GCLK->STATUS.bit.SYNCBUSY) {};
+		
+	GCLK->CLKCTRL.reg = GCLK_CLKCTRL_ID_RTC | GCLK_CLKCTRL_GEN_GCLK7;
+	while (GCLK->STATUS.bit.SYNCBUSY) {};
+	GCLK->CLKCTRL.reg = GCLK_CLKCTRL_CLKEN;
+	while (GCLK->STATUS.bit.SYNCBUSY) {};
+	
+	
+	RTC->MODE1.CTRL.bit.SWRST = 1u;
+	while (RTC->MODE1.CTRL.bit.SWRST && RTC->MODE1.STATUS.bit.SYNCBUSY) {};
+	RTC->MODE1.CTRL.reg = RTC_MODE1_CTRL_MODE_COUNT16 | RTC_MODE1_CTRL_PRESCALER_DIV1;
+	while (RTC->MODE1.STATUS.bit.SYNCBUSY) {};
+	RTC->MODE1.PER.reg = RTC_MODE1_PER_PER(1024u);
+	while (RTC->MODE1.STATUS.bit.SYNCBUSY) {};
+	RTC->MODE1.CTRL.reg = RTC_MODE1_CTRL_ENABLE;
+	while (RTC->MODE1.STATUS.bit.SYNCBUSY) {};
+	*/
+	PORT->Group[0].OUTTGL.reg = PORT_PA02; 
+	
+}
+
+void RTC_Handler(void)
+{
+	
+}
