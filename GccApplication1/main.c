@@ -1,16 +1,7 @@
-/*
- * GccApplication1.c
- *
- * Created: 12/19/2019 5:22:37 PM
- * Author : Kevin
- */ 
-
 
 #include "sam.h"
 
-/*
- * From hal_atomic.h
- */
+/* hal_atomic.h */
 #define CRITICAL_SECTION_ENTER()         \
 	{                                    \
 		volatile uint32_t __atomic;      \
@@ -22,15 +13,6 @@
 		__set_PRIMASK(__atomic);         \
 	}
 
-/*
- * Configurations copied from LedBlink HPL
- */
-//#define CONFIG_NVM_WAIT_STATE	0
-//#define CONFIG_CPU_DIV			PM_CPUSEL_CPUDIV_DIV1_Val
-//#define CONFIG_APBA_DIV			PM_APBASEL_APBADIV_DIV1_Val
-//#define CONFIG_APBB_DIV			PM_APBBSEL_APBBDIV_DIV1_Val
-//#define CONFIG_APBC_DIV			PM_APBCSEL_APBCDIV_DIV1_Val
-
 #define CONFIG_CPU_FREQUENCY		1000000
 
 int main(void)
@@ -40,76 +22,41 @@ int main(void)
 	PORT->Group[0].DIRSET.reg = PORT_PA02;
 	PORT->Group[0].OUTSET.reg = PORT_PA02;
 	
-	//CRITICAL_SECTION_ENTER();
-	//NVMCTRL->CTRLB.reg |= NVMCTRL_CTRLB_RWS(CONFIG_NVM_WAIT_STATE);
-	//CRITICAL_SECTION_LEAVE();
+	/*
+	 * By default, clock source OSC8M is configured to have a DIV8 prescaler (SYSCTRL->OSC8M)
+	 * 
+	 * So, the OSC8M clock source outputs a 1MHz clock (roughly)
+	 * 
+	 * Generator 0 is, by default, enabled and uses OSC8M as its source (see SAM D21 datasheet 8.3.1)
+	 * 
+	 * Generator 0 is the clock used by the PM (see SAM D21 datasheet Fig 14-1).
+	 * 
+	 * The clock is _not_ divided before reaching the CPU (PM->CPUSEL.CPUDIV is divide by 1)
+	 *
+	 * So, the CPU is running using a 1MHz clock on startup (per comments in system_samd21.c)
+	 * 
+	 * The SysTick is configured to use 
+	 */
 	
-	//CRITICAL_SECTION_ENTER();
-	//PM->CPUSEL.reg |= PM_CPUSEL_CPUDIV(CONFIG_CPU_DIV);
-	//CRITICAL_SECTION_LEAVE();
-	
-	//CRITICAL_SECTION_ENTER();
-	//PM->APBASEL.reg |= PM_APBASEL_APBADIV(CONFIG_APBA_DIV);
-	//CRITICAL_SECTION_LEAVE();
-	
-	//CRITICAL_SECTION_ENTER();
-	//PM->APBBSEL.reg |= PM_APBBSEL_APBBDIV(CONFIG_APBB_DIV);
-	//CRITICAL_SECTION_LEAVE();
-	
-	//CRITICAL_SECTION_ENTER();
-	//PM->APBCSEL.reg |= PM_APBCSEL_APBCDIV(CONFIG_APBC_DIV);
-	//CRITICAL_SECTION_LEAVE();
-	
-	uint16_t calib;
-	calib = (SYSCTRL->OSC8M.reg & SYSCTRL_OSC8M_CALIB_Msk) >> SYSCTRL_OSC8M_CALIB_Pos;
-	uint16_t frange;
-	frange = (SYSCTRL->OSC8M.reg & SYSCTRL_OSC8M_FRANGE_Msk) >> SYSCTRL_OSC8M_FRANGE_Pos;
-	
-	CRITICAL_SECTION_ENTER();
-	SYSCTRL->OSC8M.reg = SYSCTRL_OSC8M_FRANGE(frange) |
-							SYSCTRL_OSC8M_CALIB(calib) |
-							SYSCTRL_OSC8M_PRESC(SYSCTRL_OSC8M_PRESC_3_Val) |
-							(0u << SYSCTRL_OSC8M_RUNSTDBY_Pos) |
-							(1u << SYSCTRL_OSC8M_ENABLE_Pos);
-	CRITICAL_SECTION_LEAVE();
-	while(!SYSCTRL->PCLKSR.bit.OSC8MRDY);
-	
-	CRITICAL_SECTION_ENTER();
-	SYSCTRL->OSC8M.reg |= SYSCTRL_OSC8M_ONDEMAND;
-	//CRITICAL_SECTION_LEAVE();
-	
-	//CRITICAL_SECTION_ENTER();
-	SYSCTRL->OSC32K.reg &= ~SYSCTRL_OSC32K_ENABLE;
-	//CRITICAL_SECTION_LEAVE();
-	
-	//CRITICAL_SECTION_ENTER();
-	GCLK->GENDIV.reg = GCLK_GENDIV_DIV(1u) |
-						GCLK_GENDIV_ID(0u);
-	//CRITICAL_SECTION_LEAVE();
-	
-	//CRITICAL_SECTION_ENTER();
-	GCLK->GENCTRL.reg = (0u << GCLK_GENCTRL_RUNSTDBY_Pos) |
-							(0u << GCLK_GENCTRL_DIVSEL_Pos) |
-							(0u << GCLK_GENCTRL_OE_Pos) |
-							(0u << GCLK_GENCTRL_OOV_Pos) |
-							(0u << GCLK_GENCTRL_IDC_Pos) |
-							(1u << GCLK_GENCTRL_GENEN_Pos) |
-							(GCLK_GENCTRL_SRC_OSC8M_Val << GCLK_GENCTRL_SRC_Pos) |
+	/*CRITICAL_SECTION_ENTER();
+	GCLK->GENDIV.reg = GCLK_GENDIV_DIV(1) |
+						GCLK_GENDIV_ID(0);
+	GCLK->GENCTRL.reg = (GCLK_GENCTRL_GENEN) |
+							GCLK_GENCTRL_SRC_OSC8M |
 							GCLK_GENCTRL_ID(0u);
 	while(GCLK->STATUS.bit.SYNCBUSY);
-	CRITICAL_SECTION_LEAVE();
+	CRITICAL_SECTION_LEAVE();*/
 	
-	SysTick->LOAD = (0xFFFFFF << SysTick_LOAD_RELOAD_Pos);
-	SysTick->CTRL = (1u << SysTick_CTRL_ENABLE_Pos) |
-						(0u << SysTick_CTRL_TICKINT_Pos) |
-						(1u << SysTick_CTRL_CLKSOURCE_Pos);
+	SysTick->CTRL = (1 << SysTick_CTRL_ENABLE_Pos) |
+						(0 << SysTick_CTRL_TICKINT_Pos) |
+						(1 << SysTick_CTRL_CLKSOURCE_Pos);
 	
     while (1) 
     {
 		PORT->Group[0].OUTTGL.reg = PORT_PA02;
 		
 		uint16_t milliseconds = 1000;
-		uint32_t cycles = milliseconds * (CONFIG_CPU_FREQUENCY / 10000) * 10;
+		uint32_t cycles = milliseconds * (CONFIG_CPU_FREQUENCY / 1000);
 		
 		uint8_t  n   = cycles >> 24;
 		uint32_t buf = cycles;
