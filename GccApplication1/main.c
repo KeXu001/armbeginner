@@ -62,21 +62,8 @@ int main(void)
     {
 		PORT->Group[0].OUTTGL.reg = PORT_PA02;
 		
-		uint16_t milliseconds = 1000;
-		uint32_t cycles = milliseconds * (CONFIG_CPU_FREQUENCY / 1000);
-		
-		uint8_t  n   = cycles >> 24;
-		uint32_t buf = cycles;
-
-		while (n--) {
-			SysTick->LOAD = 0xFFFFFF;
-			SysTick->VAL  = 0xFFFFFF;
-			while (!(SysTick->CTRL & SysTick_CTRL_COUNTFLAG_Msk));
-			buf -= 0xFFFFFF;
-		}
-
-		SysTick->LOAD = buf;
-		SysTick->VAL  = buf;
+		SysTick->LOAD = 0xF4240;
+		SysTick->VAL = 0xF4240;
 		while (!(SysTick->CTRL & SysTick_CTRL_COUNTFLAG_Msk));
     }
 }
