@@ -35,7 +35,14 @@ int main(void)
 	 *
 	 * So, the CPU is running using a 1MHz clock on startup (per comments in system_samd21.c)
 	 * 
-	 * The SysTick is configured to use 
+	 * The SysTick is then configured to use the the internal core clock as its source
+	 *  http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.dai0179b/ar01s02s08.html
+	 * 
+	 * The delay loop contains an inner delay loop which runs multiple times
+	 * This is simply because the max counter for SysTick is 24bits
+	 *  http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.dai0179b/ar01s02s08.html
+	 *
+	 * 
 	 */
 	
 	/*CRITICAL_SECTION_ENTER();
