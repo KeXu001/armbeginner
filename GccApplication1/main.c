@@ -19,51 +19,67 @@ int main(void)
 {
 	SystemInit();
 	
-	PORT->Group[0].DIRSET.reg = PORT_PA02;
-	PORT->Group[0].OUTSET.reg = PORT_PA02;
+	CRITICAL_SECTION_ENTER();
 	
-	/*
-	 * By default, clock source OSC8M is configured to have a DIV8 prescaler (SYSCTRL->OSC8M)
-	 * 
-	 * So, the OSC8M clock source outputs a 1MHz clock (roughly)
-	 * 
-	 * Generator 0 is, by default, enabled and uses OSC8M as its source (see SAM D21 datasheet 8.3.1)
-	 * 
-	 * Generator 0 is the clock used by the PM (see SAM D21 datasheet Fig 14-1).
-	 * 
-	 * The clock is _not_ divided before reaching the CPU (PM->CPUSEL.CPUDIV is divide by 1)
-	 *
-	 * So, the CPU is running using a 1MHz clock on startup (per comments in system_samd21.c)
-	 * 
-	 * The SysTick is then configured to use the the internal core clock as its source
-	 *  http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.dai0179b/ar01s02s08.html
-	 * 
-	 * The delay loop contains an inner delay loop which runs multiple times
-	 * This is simply because the max counter for SysTick is 24bits
-	 *  http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.dai0179b/ar01s02s08.html
-	 *
-	 * 
-	 */
+	/* external crystal oscillator */
+	SYSCTRL->XOSC32K.reg = SYSCTRL_XOSC32K_XTALEN |
+							SYSCTRL_XOSC32K_STARTUP(0x5) |
+							SYSCTRL_XOSC32K_EN32K;
+	SYSCTRL->XOSC32K.reg |= SYSCTRL_XOSC32K_ENABLE;
+	while(!SYSCTRL->PCLKSR.bit.XOSC32KRDY);
 	
-	/*CRITICAL_SECTION_ENTER();
-	GCLK->GENDIV.reg = GCLK_GENDIV_DIV(1) |
-						GCLK_GENDIV_ID(0);
-	GCLK->GENCTRL.reg = (GCLK_GENCTRL_GENEN) |
-							GCLK_GENCTRL_SRC_OSC8M |
-							GCLK_GENCTRL_ID(0u);
+	/* generic clock generator */
+	GCLK->GENDIV.reg = GCLK_GENDIV_ID(2u) | GCLK_GENDIV_DIV(1u);
+	GCLK->GENCTRL.reg = GCLK_GENCTRL_ID(2u) | GCLK_GENCTRL_SRC_XOSC32K | GCLK_GENCTRL_GENEN;
 	while(GCLK->STATUS.bit.SYNCBUSY);
-	CRITICAL_SECTION_LEAVE();*/
+	GCLK->CLKCTRL.reg = GCLK_CLKCTRL_ID_RTC | GCLK_CLKCTRL_GEN_GCLK2 | GCLK_CLKCTRL_CLKEN;
+	
+	/* power manager */
+	PM->APBASEL.reg = PM_APBASEL_APBADIV_DIV1;
+	PM->APBAMASK.reg |= PM_APBAMASK_RTC;
+	
+	/* real-time counter */
+	RTC->MODE1.CTRL.reg = RTC_MODE1_CTRL_MODE_COUNT16 | RTC_MODE1_CTRL_PRESCALER_DIV32;
+	RTC->MODE1.PER.reg = RTC_MODE1_PER_PER(1024u);
+	while(RTC->MODE1.STATUS.bit.SYNCBUSY);
+	RTC->MODE1.COMP[0].reg = 0xFFFF;
+	while(RTC->MODE1.STATUS.bit.SYNCBUSY);
+	RTC->MODE1.COMP[1].reg = 0xFFFF;
+	while(RTC->MODE1.STATUS.bit.SYNCBUSY);
+	RTC->MODE1.INTENSET.reg = RTC_MODE1_INTENSET_OVF;
+	RTC->MODE1.CTRL.reg |= RTC_MODE1_CTRL_ENABLE;
+	while(RTC->MODE1.STATUS.bit.SYNCBUSY);
+	
+	/* NVIC */
+	NVIC_EnableIRQ(RTC_IRQn);
+	
+	CRITICAL_SECTION_LEAVE();
 	
 	SysTick->CTRL = (1 << SysTick_CTRL_ENABLE_Pos) |
 						(0 << SysTick_CTRL_TICKINT_Pos) |
 						(1 << SysTick_CTRL_CLKSOURCE_Pos);
 	
+	PORT->Group[0].DIRSET.reg = PORT_PA02;
+	PORT->Group[0].OUTSET.reg = PORT_PA02;
+	
     while (1) 
     {
+		SysTick->LOAD = 0x2DC6C0; // 3 seconds
+		SysTick->VAL = 0x2DC6C0;
+		while (!(SysTick->CTRL & SysTick_CTRL_COUNTFLAG_Msk));
+		
+		PORT->Group[0].OUTTGL.reg = PORT_PA02;
+    }
+}
+
+void RTC_Handler (void)
+{
+	while(1)
+	{
 		PORT->Group[0].OUTTGL.reg = PORT_PA02;
 		
-		SysTick->LOAD = 0xF4240;
-		SysTick->VAL = 0xF4240;
+		SysTick->LOAD = 0x7A120; // 0.5 seconds
+		SysTick->VAL = 0x7A120;
 		while (!(SysTick->CTRL & SysTick_CTRL_COUNTFLAG_Msk));
-    }
+	}
 }
