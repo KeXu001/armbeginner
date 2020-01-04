@@ -15,16 +15,14 @@
 
 #define CONFIG_CPU_FREQUENCY		1000000
 
-int main(void)
+void setup_led_blink(void)
 {
-	SystemInit();
-	
 	CRITICAL_SECTION_ENTER();
 	
 	/* external crystal oscillator */
 	SYSCTRL->XOSC32K.reg = SYSCTRL_XOSC32K_XTALEN |
-							SYSCTRL_XOSC32K_STARTUP(0x5) |
-							SYSCTRL_XOSC32K_EN32K;
+	SYSCTRL_XOSC32K_STARTUP(0x5) |
+	SYSCTRL_XOSC32K_EN32K;
 	SYSCTRL->XOSC32K.reg |= SYSCTRL_XOSC32K_ENABLE;
 	while(!SYSCTRL->PCLKSR.bit.XOSC32KRDY);
 	
@@ -54,32 +52,36 @@ int main(void)
 	NVIC_EnableIRQ(RTC_IRQn);
 	
 	CRITICAL_SECTION_LEAVE();
+}
+
+int main(void)
+{
+	SystemInit();
 	
-	SysTick->CTRL = (1 << SysTick_CTRL_ENABLE_Pos) |
-						(0 << SysTick_CTRL_TICKINT_Pos) |
-						(1 << SysTick_CTRL_CLKSOURCE_Pos);
+	setup_led_blink();
+	
+// 	SysTick->CTRL = (1 << SysTick_CTRL_ENABLE_Pos) |
+// 						(0 << SysTick_CTRL_TICKINT_Pos) |
+// 						(1 << SysTick_CTRL_CLKSOURCE_Pos);
 	
 	PORT->Group[0].DIRSET.reg = PORT_PA02;
 	PORT->Group[0].OUTSET.reg = PORT_PA02;
 	
     while (1) 
     {
-		SysTick->LOAD = 0x2DC6C0; // 3 seconds
-		SysTick->VAL = 0x2DC6C0;
-		while (!(SysTick->CTRL & SysTick_CTRL_COUNTFLAG_Msk));
-		
-		PORT->Group[0].OUTTGL.reg = PORT_PA02;
+// 		SysTick->LOAD = 0x2DC6C0; // 3 seconds
+// 		SysTick->VAL = 0x2DC6C0;
+// 		while (!(SysTick->CTRL & SysTick_CTRL_COUNTFLAG_Msk));
+// 		
+// 		PORT->Group[0].OUTTGL.reg = PORT_PA02;
     }
 }
 
 void RTC_Handler (void)
 {
-	while(1)
+	if (RTC->MODE1.INTFLAG.bit.OVF)
 	{
 		PORT->Group[0].OUTTGL.reg = PORT_PA02;
-		
-		SysTick->LOAD = 0x7A120; // 0.5 seconds
-		SysTick->VAL = 0x7A120;
-		while (!(SysTick->CTRL & SysTick_CTRL_COUNTFLAG_Msk));
 	}
+	RTC->MODE1.INTFLAG.reg = RTC_MODE1_INTFLAG_OVF; // "This flag is cleared by writing a one to the flag."
 }
