@@ -62,15 +62,15 @@ void setup_sercom_usart(void)
 	CRITICAL_SECTION_ENTER();
 	
 	/* port */
-	PORT->Group[0].PINCFG[12].reg = PORT_PINCFG_PMUXEN; // PA12
-	PORT->Group[0].PINCFG[13].reg = PORT_PINCFG_PMUXEN; // PA13
-	PORT->Group[0].PINCFG[14].reg = PORT_PINCFG_PMUXEN; // PA14
-	PORT->Group[0].PINCFG[15].reg = PORT_PINCFG_PMUXEN; // PA15
+	PORT->Group[0].PINCFG[12].reg |= PORT_PINCFG_PMUXEN; // PA12
+	PORT->Group[0].PINCFG[13].reg |= PORT_PINCFG_PMUXEN; // PA13
+	PORT->Group[0].PINCFG[14].reg |= PORT_PINCFG_PMUXEN; // PA14
+	PORT->Group[0].PINCFG[15].reg |= PORT_PINCFG_PMUXEN; // PA15
 	
-	PORT->Group[0].PMUX[6].reg = PORT_PMUX_PMUXE_C; // PA12 is in the even spot of PMUX6
-	PORT->Group[0].PMUX[6].reg = PORT_PMUX_PMUXO_C; // PA13 is in the odd spot of PMUX6
-	PORT->Group[0].PMUX[7].reg = PORT_PMUX_PMUXE_C; // PA14 is in the even spot of PMUX7
-	PORT->Group[0].PMUX[7].reg = PORT_PMUX_PMUXO_C; // PA15 is in the odd spot of PMUX7
+	PORT->Group[0].PMUX[6].reg |= PORT_PMUX_PMUXE_C; // PA12 is in the even spot of PMUX6
+	PORT->Group[0].PMUX[6].reg |= PORT_PMUX_PMUXO_C; // PA13 is in the odd spot of PMUX6
+	PORT->Group[0].PMUX[7].reg |= PORT_PMUX_PMUXE_C; // PA14 is in the even spot of PMUX7
+	PORT->Group[0].PMUX[7].reg |= PORT_PMUX_PMUXO_C; // PA15 is in the odd spot of PMUX7
 	
 	/* generic clock generator */
 	GCLK->CLKCTRL.reg = GCLK_CLKCTRL_ID_SERCOM2_CORE | GCLK_CLKCTRL_GEN_GCLK0 | GCLK_CLKCTRL_CLKEN;
@@ -81,7 +81,7 @@ void setup_sercom_usart(void)
 	
 	/* sercom USART */
 	SERCOM2->USART.CTRLA.reg = SERCOM_USART_CTRLA_MODE_USART_INT_CLK |		// USART w/ internal clock
-								SERCOM_USART_CTRLA_DORD |					// LSB first
+								(1u << SERCOM_USART_CTRLA_DORD_Pos) |		// LSB first
 								(0u << SERCOM_USART_CTRLA_CMODE_Pos) |		// asynchronous
 								SERCOM_USART_CTRLA_RXPO(0x1) |				// PAD[1] = RX
 								SERCOM_USART_CTRLA_TXPO(0x1) |				// PAD[2] = TX, PAD[3] = XCK
@@ -103,7 +103,7 @@ int main(void)
 	SystemInit();
 	
 	setup_led_blink();
-	setup_sercom_usart();
+	setup_sercom_usart(); // need to use oscilloscope or something on PA13 and PA14 to see is sercom is improperly configured or if usb/uart is broken
 	
 	PORT->Group[0].OUTTGL.reg = PORT_PA02;
 	
@@ -118,9 +118,9 @@ void RTC_Handler (void)
 	if (RTC->MODE1.INTFLAG.bit.OVF)
 	{
 		while(!SERCOM2->USART.INTFLAG.bit.DRE);
-		SERCOM2->USART.DATA.reg = 0x46; // F
+		SERCOM2->USART.DATA.reg = SERCOM_USART_DATA_DATA(0x46); // F
 		while(!SERCOM2->USART.INTFLAG.bit.TXC);
-		SERCOM2->USART.DATA.reg = 0x0A; // newline
+		SERCOM2->USART.DATA.reg = SERCOM_USART_DATA_DATA(0x0A); // newline
 		while(!SERCOM2->USART.INTFLAG.bit.TXC);
 		
 		PORT->Group[0].OUTTGL.reg = PORT_PA02;
