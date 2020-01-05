@@ -103,7 +103,7 @@ int main(void)
 	SystemInit();
 	
 	setup_led_blink();
-	setup_sercom_usart(); // need to use oscilloscope or something on PA13 and PA14 to see is sercom is improperly configured or if usb/uart is broken
+	setup_sercom_usart();
 	
 	PORT->Group[0].OUTTGL.reg = PORT_PA02;
 	
