@@ -80,20 +80,20 @@ void setup_sercom_usart(void)
 	PM->APBCMASK.reg |= PM_APBCMASK_SERCOM2;
 	
 	/* sercom USART */
-	
-	SERCOM2->USART.CTRLA.reg = SERCOM_USART_CTRLA_DORD |
+	SERCOM2->USART.CTRLA.reg = SERCOM_USART_CTRLA_MODE_USART_INT_CLK |		// USART w/ internal clock
+								SERCOM_USART_CTRLA_DORD |					// LSB first
 								(0u << SERCOM_USART_CTRLA_CMODE_Pos) |		// asynchronous
 								SERCOM_USART_CTRLA_RXPO(0x1) |				// PAD[1] = RX
-								SERCOM_USART_CTRLA_TXPO(0x1);				// PAD[2] = TX, PAD[3] = XCK
-	SERCOM2->USART.BAUD.reg = SERCOM_USART_BAUD_BAUD(9600);					// 9600 baud
+								SERCOM_USART_CTRLA_TXPO(0x1) |				// PAD[2] = TX, PAD[3] = XCK
+								SERCOM_USART_CTRLA_FORM(0x0);				// USART frame w/out parity
+	SERCOM2->USART.BAUD.reg = SERCOM_USART_BAUD_BAUD(0xD8AE);				// 9600 f_baud = 55470 BAUD.reg
 	SERCOM2->USART.CTRLB.reg = SERCOM_USART_CTRLB_CHSIZE(0x0) |				// char size = 8bits
 								SERCOM_USART_CTRLB_RXEN |					// enable RX
 								SERCOM_USART_CTRLB_TXEN |					// enable TX
 								(0x0 << SERCOM_USART_CTRLB_SBMODE_Pos);		// 1 stop bit
 	SERCOM2->USART.CTRLA.reg |= SERCOM_USART_CTRLA_ENABLE;
-	//while(!SERCOM2->USART.SYNCBUSY.bit.ENABLE);
-	//while(!SERCOM2->USART.SYNCBUSY.bit.CTRLB);
-	
+	while(SERCOM2->USART.SYNCBUSY.bit.ENABLE);
+	while(SERCOM2->USART.SYNCBUSY.bit.CTRLB);
 	
 	CRITICAL_SECTION_LEAVE();
 }
@@ -117,6 +117,12 @@ void RTC_Handler (void)
 {
 	if (RTC->MODE1.INTFLAG.bit.OVF)
 	{
+		while(!SERCOM2->USART.INTFLAG.bit.DRE);
+		SERCOM2->USART.DATA.reg = 0x46; // F
+		while(!SERCOM2->USART.INTFLAG.bit.TXC);
+		SERCOM2->USART.DATA.reg = 0x0A; // newline
+		while(!SERCOM2->USART.INTFLAG.bit.TXC);
+		
 		PORT->Group[0].OUTTGL.reg = PORT_PA02;
 	}
 	RTC->MODE1.INTFLAG.reg = RTC_MODE1_INTFLAG_OVF; // "This flag is cleared by writing a one to the flag."
