@@ -19,6 +19,9 @@ void setup_led_blink(void)
 {
 	CRITICAL_SECTION_ENTER();
 	
+	PORT->Group[0].DIRSET.reg = PORT_PA02;
+	PORT->Group[0].OUTSET.reg = PORT_PA02;
+	
 	/* external crystal oscillator */
 	SYSCTRL->XOSC32K.reg = SYSCTRL_XOSC32K_XTALEN |
 	SYSCTRL_XOSC32K_STARTUP(0x5) |
@@ -48,8 +51,49 @@ void setup_led_blink(void)
 	RTC->MODE1.CTRL.reg |= RTC_MODE1_CTRL_ENABLE;
 	while(RTC->MODE1.STATUS.bit.SYNCBUSY);
 	
-	/* NVIC */
+	/* NVIC interrupt */
 	NVIC_EnableIRQ(RTC_IRQn);
+	
+	CRITICAL_SECTION_LEAVE();
+}
+
+void setup_sercom_usart(void)
+{
+	CRITICAL_SECTION_ENTER();
+	
+	/* port */
+	PORT->Group[0].PINCFG[12].reg = PORT_PINCFG_PMUXEN; // PA12
+	PORT->Group[0].PINCFG[13].reg = PORT_PINCFG_PMUXEN; // PA13
+	PORT->Group[0].PINCFG[14].reg = PORT_PINCFG_PMUXEN; // PA14
+	PORT->Group[0].PINCFG[15].reg = PORT_PINCFG_PMUXEN; // PA15
+	
+	PORT->Group[0].PMUX[6].reg = PORT_PMUX_PMUXE_C; // PA12 is in the even spot of PMUX6
+	PORT->Group[0].PMUX[6].reg = PORT_PMUX_PMUXO_C; // PA13 is in the odd spot of PMUX6
+	PORT->Group[0].PMUX[7].reg = PORT_PMUX_PMUXE_C; // PA14 is in the even spot of PMUX7
+	PORT->Group[0].PMUX[7].reg = PORT_PMUX_PMUXO_C; // PA15 is in the odd spot of PMUX7
+	
+	/* generic clock generator */
+	GCLK->CLKCTRL.reg = GCLK_CLKCTRL_ID_SERCOM2_CORE | GCLK_CLKCTRL_GEN_GCLK0 | GCLK_CLKCTRL_CLKEN;
+	
+	/* power manager */
+	PM->APBCSEL.reg = PM_APBCSEL_APBCDIV_DIV1;
+	PM->APBCMASK.reg |= PM_APBCMASK_SERCOM2;
+	
+	/* sercom USART */
+	
+	SERCOM2->USART.CTRLA.reg = SERCOM_USART_CTRLA_DORD |
+								(0u << SERCOM_USART_CTRLA_CMODE_Pos) |		// asynchronous
+								SERCOM_USART_CTRLA_RXPO(0x1) |				// PAD[1] = RX
+								SERCOM_USART_CTRLA_TXPO(0x1);				// PAD[2] = TX, PAD[3] = XCK
+	SERCOM2->USART.BAUD.reg = SERCOM_USART_BAUD_BAUD(9600);					// 9600 baud
+	SERCOM2->USART.CTRLB.reg = SERCOM_USART_CTRLB_CHSIZE(0x0) |				// char size = 8bits
+								SERCOM_USART_CTRLB_RXEN |					// enable RX
+								SERCOM_USART_CTRLB_TXEN |					// enable TX
+								(0x0 << SERCOM_USART_CTRLB_SBMODE_Pos);		// 1 stop bit
+	SERCOM2->USART.CTRLA.reg |= SERCOM_USART_CTRLA_ENABLE;
+	//while(!SERCOM2->USART.SYNCBUSY.bit.ENABLE);
+	//while(!SERCOM2->USART.SYNCBUSY.bit.CTRLB);
+	
 	
 	CRITICAL_SECTION_LEAVE();
 }
@@ -59,21 +103,13 @@ int main(void)
 	SystemInit();
 	
 	setup_led_blink();
+	setup_sercom_usart();
 	
-// 	SysTick->CTRL = (1 << SysTick_CTRL_ENABLE_Pos) |
-// 						(0 << SysTick_CTRL_TICKINT_Pos) |
-// 						(1 << SysTick_CTRL_CLKSOURCE_Pos);
-	
-	PORT->Group[0].DIRSET.reg = PORT_PA02;
-	PORT->Group[0].OUTSET.reg = PORT_PA02;
+	PORT->Group[0].OUTTGL.reg = PORT_PA02;
 	
     while (1) 
     {
-// 		SysTick->LOAD = 0x2DC6C0; // 3 seconds
-// 		SysTick->VAL = 0x2DC6C0;
-// 		while (!(SysTick->CTRL & SysTick_CTRL_COUNTFLAG_Msk));
-// 		
-// 		PORT->Group[0].OUTTGL.reg = PORT_PA02;
+		
     }
 }
 
