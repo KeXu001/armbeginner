@@ -106,22 +106,59 @@ int main(void)
     setup_sercom_usart();
     
     PORT->Group[0].OUTTGL.reg = PORT_PA02;
-    
-    while (1) 
+
+    while (1)
     {
         
     }
 }
 
+void uart_putc(char c)
+{
+    if (c)
+    {
+        while(!SERCOM2->USART.INTFLAG.bit.DRE);
+        SERCOM2->USART.DATA.reg = SERCOM_USART_DATA_DATA(c);
+        while(!SERCOM2->USART.INTFLAG.bit.TXC);
+    }
+}
+
+void uart_puti(uint32_t val, uint32_t base)
+{
+    char txt[10] = {0};  // maximum value of uint32_t is 10-digits
+    
+    uint32_t ind = 9;  // start from end
+
+    while(val != 0)
+    {
+        uint32_t rem = val % base;
+        txt[ind--] = (rem <= 9) ? rem + '0' : (rem-10) + 'A';  // support both decimal and hex
+        val = val / base;
+    }
+
+    if (ind==9)
+    {
+        txt[ind] = '0';  // edge case when val = 0
+    }
+
+    ind = 0;  // start from beginning for printing
+    while(ind <= 9)
+    {
+        uart_putc(txt[ind++]);
+    }
+
+    return;
+}
+
+uint32_t master_counter = 0;
+
 void RTC_Handler (void)
 {
     if (RTC->MODE1.INTFLAG.bit.OVF)
     {
-        while(!SERCOM2->USART.INTFLAG.bit.DRE);
-        SERCOM2->USART.DATA.reg = SERCOM_USART_DATA_DATA(0x46); // F
-        while(!SERCOM2->USART.INTFLAG.bit.TXC);
-        SERCOM2->USART.DATA.reg = SERCOM_USART_DATA_DATA(0x0A); // newline
-        while(!SERCOM2->USART.INTFLAG.bit.TXC);
+        uart_puti(master_counter, 16);
+        uart_putc('\n');
+        master_counter++;
         
         PORT->Group[0].OUTTGL.reg = PORT_PA02;
     }
