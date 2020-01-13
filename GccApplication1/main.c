@@ -15,6 +15,71 @@
 
 #define CONFIG_CPU_FREQUENCY 1000000
 
+// make NVM calibration data more accessible
+// https://community.atmel.com/forum/samd10-how-readwrite-nvm-flash-without-asf
+typedef struct {
+    uint64_t  :27;                      /*!< bit:  0..26  Reserved                           */
+    uint64_t  ADC_LINEARITY :8;         /*!< bit: 27..34  ADC Linearity Calibration          */
+    uint64_t  ADC_BIASCAL :3;           /*!< bit: 35..37  ADC Bias Calibration               */
+    uint64_t  OSC32K_CAL :7;            /*!< bit: 38..44  OSC32KCalibration                  */
+    uint64_t  USB_TRANSN :5;            /*!< bit: 45..49  USB TRANSN calibration value       */
+    uint64_t  USB_TRANSP :5;            /*!< bit: 50..54  USB TRANSP calibration value       */
+    uint64_t  USB_TRIM :3;              /*!< bit: 55..57  USB TRIM calibration value         */
+    uint64_t  DFLL48M_COARSE_CAL :6;    /*!< bit: 58..63  DFLL48M Coarse calibration value   */
+} NVM_SW_Calib_t;
+#define NVM_SW_CALIB_ADDR   NVMCTRL_OTP4
+#define NVM_SW_CALIB        ((NVM_SW_Calib_t*) NVM_SW_CALIB_ADDR)
+
+
+void uart_putc(char c)
+{
+    if (c)
+    {
+        while(!SERCOM2->USART.INTFLAG.bit.DRE);
+        SERCOM2->USART.DATA.reg = SERCOM_USART_DATA_DATA(c);
+        while(!SERCOM2->USART.INTFLAG.bit.TXC);
+    }
+}
+
+void uart_puti(uint32_t val, uint32_t base)
+{
+    char txt[10] = {0};  // maximum value of uint32_t is 10-digits
+    
+    uint32_t ind = 9;  // start from end
+
+    while(val != 0)
+    {
+        uint32_t rem = val % base;
+        txt[ind--] = (rem <= 9) ? rem + '0' : (rem-10) + 'A';  // support both decimal and hex
+        val = val / base;
+    }
+
+    if (ind==9)
+    {
+        txt[ind] = '0';  // edge case when val = 0
+    }
+
+    ind = 0;  // start from beginning for printing
+    while(ind <= 9)
+    {
+        uart_putc(txt[ind++]);
+    }
+
+    return;
+}
+
+uint32_t adc_read()
+{
+    uint32_t res;
+
+    ADC->SWTRIG.reg = ADC_SWTRIG_START;
+    while(ADC->STATUS.bit.SYNCBUSY);
+    while(!ADC->INTFLAG.bit.RESRDY);
+    res = ADC->RESULT.reg;
+
+    return res;
+}
+
 void setup_led_blink(void)
 {
     CRITICAL_SECTION_ENTER();
@@ -62,15 +127,15 @@ void setup_sercom_usart(void)
     CRITICAL_SECTION_ENTER();
     
     /* port */
-    PORT->Group[0].PINCFG[12].reg |= PORT_PINCFG_PMUXEN; // PA12
-    PORT->Group[0].PINCFG[13].reg |= PORT_PINCFG_PMUXEN; // PA13
-    PORT->Group[0].PINCFG[14].reg |= PORT_PINCFG_PMUXEN; // PA14
-    PORT->Group[0].PINCFG[15].reg |= PORT_PINCFG_PMUXEN; // PA15
+    PORT->Group[0].PINCFG[12].reg |= PORT_PINCFG_PMUXEN;  // PA12
+    PORT->Group[0].PINCFG[13].reg |= PORT_PINCFG_PMUXEN;  // PA13
+    PORT->Group[0].PINCFG[14].reg |= PORT_PINCFG_PMUXEN;  // PA14
+    PORT->Group[0].PINCFG[15].reg |= PORT_PINCFG_PMUXEN;  // PA15
     
-    PORT->Group[0].PMUX[6].reg |= PORT_PMUX_PMUXE_C; // PA12 is in the even spot of PMUX6
-    PORT->Group[0].PMUX[6].reg |= PORT_PMUX_PMUXO_C; // PA13 is in the odd spot of PMUX6
-    PORT->Group[0].PMUX[7].reg |= PORT_PMUX_PMUXE_C; // PA14 is in the even spot of PMUX7
-    PORT->Group[0].PMUX[7].reg |= PORT_PMUX_PMUXO_C; // PA15 is in the odd spot of PMUX7
+    PORT->Group[0].PMUX[6].reg |= PORT_PMUX_PMUXE_C;  // PA12 is in the even spot of PMUX6
+    PORT->Group[0].PMUX[6].reg |= PORT_PMUX_PMUXO_C;  // PA13 is in the odd spot of PMUX6
+    PORT->Group[0].PMUX[7].reg |= PORT_PMUX_PMUXE_C;  // PA14 is in the even spot of PMUX7
+    PORT->Group[0].PMUX[7].reg |= PORT_PMUX_PMUXO_C;  // PA15 is in the odd spot of PMUX7
     
     /* generic clock generator */
     GCLK->CLKCTRL.reg = GCLK_CLKCTRL_ID_SERCOM2_CORE | GCLK_CLKCTRL_GEN_GCLK0 | GCLK_CLKCTRL_CLKEN;
@@ -98,12 +163,55 @@ void setup_sercom_usart(void)
     CRITICAL_SECTION_LEAVE();
 }
 
+void setup_adc(void)
+{
+    CRITICAL_SECTION_ENTER();
+
+    /* port */
+    PORT->Group[0].PINCFG[8].reg |= PORT_PINCFG_PMUXEN;     // PA08
+    PORT->Group[0].PMUX[4].reg |= PORT_PMUX_PMUXE_B;        // PA08 is in the even spot of PMUX4
+    PORT->Group[0].PINCFG[3].reg |= PORT_PINCFG_PMUXEN;     // PA03
+    PORT->Group[0].PMUX[1].reg |= PORT_PMUX_PMUXO_B;        // PA03 is in the odd spot of PMUX1
+
+    /* generic clock generator */
+    GCLK->CLKCTRL.reg = GCLK_CLKCTRL_ID_ADC | GCLK_CLKCTRL_GEN_GCLK0 | GCLK_CLKCTRL_CLKEN;
+
+    /* power manager */
+    PM->APBCSEL.reg = PM_APBCSEL_APBCDIV_DIV1;  // redundant if this is done in setup_sercom_usart
+    PM->APBCMASK.reg |= PM_APBCMASK_ADC;
+
+    /* ADC */
+    ADC->REFCTRL.reg = ADC_REFCTRL_REFCOMP |                // enable reference buffer offset
+                        ADC_REFCTRL_REFSEL_AREFA;           // use VREFA = PA03 = pin4 as refernce voltage
+    ADC->CTRLB.reg = ADC_CTRLB_PRESCALER_DIV4 |             // peripheral_clock div 4
+                        ADC_CTRLB_RESSEL_12BIT |            // default 12 bit conversion
+                        (0u << ADC_CTRLB_FREERUN_Pos) |     // single conversion mode
+                        (0u << ADC_CTRLB_DIFFMODE_Pos);     // single-ended mode
+    while(ADC->STATUS.bit.SYNCBUSY);
+    ADC->INPUTCTRL.reg = ADC_INPUTCTRL_GAIN_1X |            // 1x gain
+                            ADC_INPUTCTRL_INPUTOFFSET(0u) | // disable pin scan (use single pin for pos(+) input)
+                            ADC_INPUTCTRL_MUXNEG(0x18) |    // negative = internal ground
+                            ADC_INPUTCTRL_MUXPOS(0x02);     // positive = AIN[2] = pin7
+    while(ADC->STATUS.bit.SYNCBUSY);
+
+    uint64_t linearity = NVM_SW_CALIB->ADC_LINEARITY;
+    uint64_t bias = NVM_SW_CALIB->ADC_BIASCAL;
+    ADC->CALIB.reg = ADC_CALIB_LINEARITY_CAL(linearity) | ADC_CALIB_BIAS_CAL(bias);
+
+    ADC->CTRLA.reg = ADC_CTRLA_ENABLE;
+
+    adc_read();  // "The first conversion after the reference is changed must not be used."
+
+    CRITICAL_SECTION_LEAVE();
+}
+
 int main(void)
 {
     SystemInit();
     
     setup_led_blink();
     setup_sercom_usart();
+    setup_adc();
     
     PORT->Group[0].OUTTGL.reg = PORT_PA02;
 
@@ -113,43 +221,6 @@ int main(void)
     }
 }
 
-void uart_putc(char c)
-{
-    if (c)
-    {
-        while(!SERCOM2->USART.INTFLAG.bit.DRE);
-        SERCOM2->USART.DATA.reg = SERCOM_USART_DATA_DATA(c);
-        while(!SERCOM2->USART.INTFLAG.bit.TXC);
-    }
-}
-
-void uart_puti(uint32_t val, uint32_t base)
-{
-    char txt[10] = {0};  // maximum value of uint32_t is 10-digits
-    
-    uint32_t ind = 9;  // start from end
-
-    while(val != 0)
-    {
-        uint32_t rem = val % base;
-        txt[ind--] = (rem <= 9) ? rem + '0' : (rem-10) + 'A';  // support both decimal and hex
-        val = val / base;
-    }
-
-    if (ind==9)
-    {
-        txt[ind] = '0';  // edge case when val = 0
-    }
-
-    ind = 0;  // start from beginning for printing
-    while(ind <= 9)
-    {
-        uart_putc(txt[ind++]);
-    }
-
-    return;
-}
-
 uint32_t master_counter = 0;
 
 void RTC_Handler (void)
@@ -157,8 +228,13 @@ void RTC_Handler (void)
     if (RTC->MODE1.INTFLAG.bit.OVF)
     {
         uart_puti(master_counter, 16);
-        uart_putc('\n');
+        uart_putc(':');
+        uart_putc(' ');
         master_counter++;
+
+        uint32_t res = adc_read();
+        uart_puti(res, 10);
+        uart_putc('\n');
         
         PORT->Group[0].OUTTGL.reg = PORT_PA02;
     }
