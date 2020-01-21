@@ -1,5 +1,6 @@
 
 #include "sam.h"
+#include <string.h>
 
 /* hal_atomic.h */
 #define CRITICAL_SECTION_ENTER()         \
@@ -203,6 +204,42 @@ void setup_adc(void)
     adc_read();  // "The first conversion after the reference is changed must not be used."
 
     CRITICAL_SECTION_LEAVE();
+}
+
+void setup_sercom_i2c(void)
+{
+    CRITICAL_SECTION_ENTER();
+    
+    /* port */
+    PORT->Group[0].PINCFG[16].reg |= PORT_PINCFG_PMUXEN;  // PA16
+    PORT->Group[0].PINCFG[17].reg |= PORT_PINCFG_PMUXEN;  // PA17
+    PORT->Group[0].PINCFG[18].reg |= PORT_PINCFG_PMUXEN;  // PA18
+    PORT->Group[0].PINCFG[19].reg |= PORT_PINCFG_PMUXEN;  // PA19
+    
+    PORT->Group[0].PMUX[8].reg |= PORT_PMUX_PMUXE_C;  // PA16 is in the even spot of PMUX8
+    PORT->Group[0].PMUX[8].reg |= PORT_PMUX_PMUXO_C;  // PA17 is in the odd spot of PMUX8
+    PORT->Group[0].PMUX[9].reg |= PORT_PMUX_PMUXE_C;  // PA18 is in the even spot of PMUX9
+    PORT->Group[0].PMUX[9].reg |= PORT_PMUX_PMUXO_C;  // PA19 is in the odd spot of PMUX9
+    
+    /* generic clock generator */
+    GCLK->CLKCTRL.reg = GCLK_CLKCTRL_ID_SERCOM1_CORE | GCLK_CLKCTRL_GEN_GCLK0 | GCLK_CLKCTRL_CLKEN;
+    // GCLK->CLKCTRL.reg = GCLK_CLKCTRL_ID_SERCOMX_SLOW | GCLK_CLKCTRL_GEN_GCLK0 | GCLK_CLKCTRL_CLKEN;  // "required for certain functions e.g. SMBus Timing"
+    
+    /* power manager */
+    // PM->APBCSEL.reg = PM_APBCSEL_APBCDIV_DIV1;  // redundant - done in setup_sercom_usart
+    PM->APBCMASK.reg |= PM_APBCMASK_SERCOM1;
+    
+    /* sercom I2C master */
+    //SERCOM1->I2CM.CTRLA = SERCOM_I2CM_CTRLA_MODE_I2C_MASTER |
+                            
+    
+    CRITICAL_SECTION_LEAVE();
+}
+
+void setup_usb()
+{
+    uint8_t ptr[2];
+    memset(ptr, 0, sizeof(ptr));
 }
 
 int main(void)
