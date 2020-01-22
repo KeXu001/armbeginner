@@ -81,6 +81,11 @@ uint32_t adc_read()
     return res;
 }
 
+void setup_dfll(void)
+{
+    
+}
+
 void setup_led_blink(void)
 {
     CRITICAL_SECTION_ENTER();
@@ -90,9 +95,9 @@ void setup_led_blink(void)
     
     /* external crystal oscillator */
     SYSCTRL->XOSC32K.reg = SYSCTRL_XOSC32K_XTALEN |
-    SYSCTRL_XOSC32K_STARTUP(0x5) |
-    SYSCTRL_XOSC32K_EN32K;
-    SYSCTRL->XOSC32K.reg |= SYSCTRL_XOSC32K_ENABLE;
+                            SYSCTRL_XOSC32K_STARTUP(0x5) |
+                            SYSCTRL_XOSC32K_EN32K;
+                            SYSCTRL->XOSC32K.reg |= SYSCTRL_XOSC32K_ENABLE;
     while(!SYSCTRL->PCLKSR.bit.XOSC32KRDY);
     
     /* generic clock generator */
@@ -169,8 +174,8 @@ void setup_adc(void)
     CRITICAL_SECTION_ENTER();
 
     /* port */
-    PORT->Group[0].PINCFG[8].reg |= PORT_PINCFG_PMUXEN;     // PA08
-    PORT->Group[0].PMUX[4].reg |= PORT_PMUX_PMUXE_B;        // PA08 is in the even spot of PMUX4
+    PORT->Group[1].PINCFG[8].reg |= PORT_PINCFG_PMUXEN;     // PB08
+    PORT->Group[1].PMUX[4].reg |= PORT_PMUX_PMUXE_B;        // PB08 is in the even spot of PMUX4
     PORT->Group[0].PINCFG[3].reg |= PORT_PINCFG_PMUXEN;     // PA03
     PORT->Group[0].PMUX[1].reg |= PORT_PMUX_PMUXO_B;        // PA03 is in the odd spot of PMUX1
 
@@ -238,9 +243,9 @@ void setup_sercom_i2c(void)
 
 void setup_usb()
 {
-    uint8_t ptr[2];
-    memset(ptr, 0, sizeof(ptr));
+    
 }
+
 
 int main(void)
 {
